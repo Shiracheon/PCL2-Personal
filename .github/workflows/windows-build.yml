@@ -1,3 +1,4 @@
+
 name: Build Personal Windows Launcher
 on:
   workflow_dispatch:
@@ -35,7 +36,7 @@ jobs:
           $gzip = [IO.Compression.GZipStream]::new($memory, [IO.Compression.CompressionMode]::Decompress)
           $patchOut = [IO.File]::Create((Join-Path $env:GITHUB_WORKSPACE 'personal-build.patch'))
           try { $gzip.CopyTo($patchOut) } finally { $patchOut.Dispose(); $gzip.Dispose(); $memory.Dispose() }
-          $expectedPatch = '81e73d35aa66a0a81bb623b9230731c41a5a19eb4751ea5fa258971aaf388996'
+          $expectedPatch = 'f3b59a85c812b65d896ad31e9b131d3d2a83dbb8e05bce87e63338689d97ea6b'
           if ((Get-FileHash personal-build.patch -Algorithm SHA256).Hash.ToLowerInvariant() -ne $expectedPatch) { throw 'Patch checksum mismatch' }
           Invoke-WebRequest -UseBasicParsing "https://codeload.github.com/Meloong-Git/PCL/zip/$sha" -OutFile source.zip
           Invoke-WebRequest -UseBasicParsing "https://codeload.github.com/Meloong-Git/MeloongCore/zip/$core" -OutFile core.zip
