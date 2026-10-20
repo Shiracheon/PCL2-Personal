@@ -1,0 +1,80 @@
+name: Build Personal Windows Launcher
+on:
+  workflow_dispatch:
+    inputs:
+      distribution:
+        description: 'Require a configured publisher Microsoft Client ID'
+        type: boolean
+        default: false
+        required: true
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-2022
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '9.0.x'
+      - uses: microsoft/setup-msbuild@v2
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Restore pinned source and apply personal changes
+        shell: powershell
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $sha = '6b9a50df911c9d68b69b24c979efba477fb14b67'
+          $core = '98157d65c7627721c816c02e8be96ac4fe61d615'
+          $patchBytes = [Convert]::FromBase64String([IO.File]::ReadAllText((Join-Path $env:GITHUB_WORKSPACE 'personal-build.patch.gz.b64')))
+          $memory = [IO.MemoryStream]::new($patchBytes)
+          $gzip = [IO.Compression.GZipStream]::new($memory, [IO.Compression.CompressionMode]::Decompress)
+          $patchOut = [IO.File]::Create((Join-Path $env:GITHUB_WORKSPACE 'personal-build.patch'))
+          try { $gzip.CopyTo($patchOut) } finally { $patchOut.Dispose(); $gzip.Dispose(); $memory.Dispose() }
+          $expectedPatch = '81e73d35aa66a0a81bb623b9230731c41a5a19eb4751ea5fa258971aaf388996'
+          if ((Get-FileHash personal-build.patch -Algorithm SHA256).Hash.ToLowerInvariant() -ne $expectedPatch) { throw 'Patch checksum mismatch' }
+          Invoke-WebRequest -UseBasicParsing "https://codeload.github.com/Meloong-Git/PCL/zip/$sha" -OutFile source.zip
+          Invoke-WebRequest -UseBasicParsing "https://codeload.github.com/Meloong-Git/MeloongCore/zip/$core" -OutFile core.zip
+          Expand-Archive source.zip -DestinationPath work
+          Expand-Archive core.zip -DestinationPath work
+          $source = Join-Path $env:GITHUB_WORKSPACE "work/PCL-$sha"
+          $coreTarget = Join-Path $source 'MeloongCore'
+          if (Test-Path $coreTarget) { Remove-Item $coreTarget -Recurse -Force }
+          Move-Item "work/MeloongCore-$core" $coreTarget
+          Push-Location $source
+          try {
+            git init -q
+            git config core.autocrlf false
+            git apply --check -p2 "$env:GITHUB_WORKSPACE/personal-build.patch"
+            if ($LASTEXITCODE -ne 0) { throw 'Patch verification failed' }
+            git apply -p2 "$env:GITHUB_WORKSPACE/personal-build.patch"
+            if ($LASTEXITCODE -ne 0) { throw 'Patch application failed' }
+          } finally { Pop-Location }
+          "PERSONAL_SOURCE=$source" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+      - name: Check source and service policy
+        shell: powershell
+        run: |
+          Set-Location $env:PERSONAL_SOURCE
+          python tests/verify_source.py
+          if ($LASTEXITCODE -ne 0) { throw 'Source verification failed' }
+          .\tests\Verify-PersonalPolicy.ps1
+      - name: Compile Windows launcher and package matching source
+        shell: powershell
+        env:
+          PCL_MS_CLIENT_ID: ${{ vars.PERSONAL_MS_CLIENT_ID }}
+          PCL_CURSEFORGE_API_KEY: ${{ secrets.PERSONAL_CURSEFORGE_API_KEY }}
+          PERSONAL_DISTRIBUTION: ${{ inputs.distribution }}
+        run: |
+          Set-Location $env:PERSONAL_SOURCE
+          $distribution = $env:PERSONAL_DISTRIBUTION -eq 'true'
+          .\build\Build-Windows.ps1 -ForDistribution:$distribution
+      - uses: actions/upload-artifact@v4
+        with:
+          name: PCL2-Personal-Windows
+          path: work/PCL-*/artifacts/*
+          if-no-files-found: error
+          retention-days: 14
