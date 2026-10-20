@@ -13,7 +13,7 @@
 
 打开 [Actions](https://github.com/Shiracheon/PCL2-Personal/actions/workflows/windows-build.yml)，选择 **Run workflow**。默认产生测试包；成功后在该次运行底部的 Artifacts 下载 `PCL2-Personal-Windows`，解压产物和内部的 Windows ZIP 后运行 `Plain Craft Launcher 2.exe`。建议 Windows 10/11 x64 和 .NET Framework 4.8，并在独立空文件夹测试。
 
-## 正版账号与模组服务
+## 正版账号与模组服务（暂不可用）
 
 每位使用者登录自己的微软账号，无需自行注册开发者应用。维护者需配置自己注册、且已获 Minecraft 服务允许的 Microsoft 公共客户端应用。未配置的测试包不能完成微软正版登录；不能把测试编译成功当作登录验证。
 
